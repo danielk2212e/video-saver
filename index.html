@@ -241,6 +241,17 @@ video { width:100%; max-height:60vh; border-radius:12px; background:#000; }
     throw new Error('Kurzlink konnte nicht aufgelöst werden (' + failures.join(', ') + '). Öffne den Kurzlink einmal in Safari oder Chrome, kopiere die vollständige Adresse mit /video/… und füge sie hier ein.');
   }
 
+  // Holt frische, direkt signierte CDN-URLs (die laden zuverlässiger als der Umleitungs-Pfad).
+  async function freshUrls(fullUrl) {
+    try {
+      const d = await fetchTikwm(fullUrl);
+      const out = [];
+      if (d.hdplay) out.push(abs(d.hdplay));
+      if (d.play) out.push(abs(d.play));
+      return { urls: out, meta: { title: (d.title || '').trim(), author: d.author && d.author.unique_id ? '@' + d.author.unique_id : '', thumbnail: abs(d.origin_cover) || abs(d.cover) }, duration: d.duration };
+    } catch { return { urls: [], meta: null }; }
+  }
+
   async function fetchTikTok(url) {
     let full = url;
     let id = videoId(full);
@@ -250,12 +261,20 @@ video { width:100%; max-height:60vh; border-radius:12px; background:#000; }
     }
     if (!id) throw new Error('Das ist kein Link zu einem einzelnen TikTok-Video.');
     if (/\/photo\//.test(full)) throw new Error('Dieser Beitrag ist eine Bilder-Slideshow und kein Video.');
-    let meta = { title: '', author: '', thumbnail: null };
-    try { meta = await fetchOembed(full); } catch { /* Vorschau ist optional */ }
+
+    // 1) Frische CDN-Links + Metadaten in einem Rutsch versuchen.
+    const fresh = await freshUrls(canonical(id));
+    // 2) Falls Metadaten fehlen, TikToks oEmbed nachladen.
+    let meta = fresh.meta;
+    if (!meta || !meta.title) {
+      try { const o = await fetchOembed(full); meta = { title: o.title, author: o.author, thumbnail: o.thumbnail }; } catch { meta = meta || { title: '', author: '', thumbnail: null }; }
+    }
+    // Reihenfolge: frische CDN-Links zuerst, dann die konstruierten Pfade als Reserve.
+    const urls = [...fresh.urls, hdUrl(id), sdUrl(id)].filter((u, i, a) => u && a.indexOf(u) === i);
     return {
       id, sourceUrl: canonical(id),
-      title: meta.title || 'TikTok-Video', author: meta.author || '', thumbnail: meta.thumbnail,
-      urls: [hdUrl(id), sdUrl(id)],
+      title: (meta && meta.title) || 'TikTok-Video', author: (meta && meta.author) || '', thumbnail: meta && meta.thumbnail,
+      duration: fresh.duration, urls,
       fileName: 'tiktok_' + id + '.mp4',
     };
   }
@@ -278,7 +297,7 @@ video { width:100%; max-height:60vh; border-radius:12px; background:#000; }
         return new Blob(chunks, { type: 'video/mp4' });
       } catch (e) { lastErr = e; }
     }
-    throw new Error('Video konnte nicht geladen werden' + (lastErr ? ' (' + lastErr.message + ')' : '') + '. Versuche „Video direkt im Browser öffnen“ weiter unten.');
+    throw new Error('Video konnte nicht geladen werden' + (lastErr ? ' (' + lastErr.message + ')' : '') + '. Dein Netz oder deine Region sperrt vermutlich TikToks Video-Server. Probiere es über mobile Daten statt WLAN (oder umgekehrt). Auf diesem Weg hilft am zuverlässigsten die Handy-App.');
   }
 
   /* ---------- Anzeige ---------- */
