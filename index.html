@@ -1,0 +1,346 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Video Saver</title>
+<meta name="description" content="TikTok-Videos ohne Wasserzeichen aufs Handy speichern.">
+<meta name="theme-color" content="#0b0f17">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Video Saver">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" href="./icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="./icon-192.png">
+<style>
+:root { color-scheme: dark;
+  --bg:#0b0f17; --card:#151b26; --line:#232c3b; --text:#f3f5f9; --muted:#8b95a7;
+  --accent:#5b8cff; --danger:#ff6b6b; --ok:#3ddc97; --tiktok:#fe2c55; --insta:#e1306c; }
+* { box-sizing:border-box; }
+html,body { margin:0; background:var(--bg); color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
+main { max-width:560px; margin:0 auto; padding:max(20px,env(safe-area-inset-top)) 16px 48px;
+  display:flex; flex-direction:column; gap:16px; min-height:100dvh; }
+header { display:flex; gap:14px; align-items:center; margin-top:8px; }
+.logo { width:48px; height:48px; border-radius:14px; background:var(--accent); color:#fff;
+  display:grid; place-items:center; font-size:20px; flex-shrink:0; }
+h1 { margin:0; font-size:26px; letter-spacing:-.4px; }
+header p { margin:2px 0 0; color:var(--muted); font-size:14px; line-height:1.4; }
+.card { background:var(--card); border:1px solid var(--line); border-radius:18px; padding:16px;
+  display:flex; flex-direction:column; gap:12px; }
+.label { color:var(--muted); font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:.06em; }
+.row { position:relative; display:flex; }
+input[type=url] { flex:1; background:#0f141d; color:var(--text); border:1px solid var(--line); border-radius:12px;
+  padding:13px 40px 13px 14px; font-size:16px; outline:none; min-width:0; }
+input[type=url]:focus { border-color:var(--accent); }
+.clear { position:absolute; right:6px; top:50%; transform:translateY(-50%); background:none; border:0;
+  color:var(--muted); font-size:22px; padding:4px 8px; cursor:pointer; }
+.actions { display:flex; gap:8px; flex-wrap:wrap; }
+.btn { flex:1 1 140px; min-height:50px; border-radius:12px; font-size:16px; font-weight:700; cursor:pointer;
+  display:inline-flex; align-items:center; justify-content:center; text-decoration:none; border:1px solid transparent; padding:0 16px; }
+.btn:disabled { opacity:.5; cursor:default; }
+.btn-primary { background:var(--accent); color:#fff; }
+.btn-secondary { background:var(--card); color:var(--text); border-color:var(--line); }
+.progress { height:6px; border-radius:999px; background:var(--line); overflow:hidden; position:relative; }
+.progress > i { display:block; height:100%; background:var(--accent); border-radius:999px; width:0; transition:width .2s; }
+.progress.indeterminate > i { width:35%; animation:slide 1.1s ease-in-out infinite; }
+@keyframes slide { 0% { transform:translateX(-100%);} 100% { transform:translateX(300%);} }
+@media (prefers-reduced-motion:reduce) { .progress.indeterminate > i { animation:none; width:100%; opacity:.6; } }
+.error { color:var(--danger); margin:0; font-size:14px; line-height:1.45; }
+.note { color:var(--ok); margin:0; font-size:14px; }
+.hint, footer { color:var(--muted); font-size:12px; line-height:1.5; margin:0; }
+footer { text-align:center; margin-top:auto; padding-top:8px; }
+.result-top { display:flex; gap:12px; }
+.thumb { width:84px; height:112px; border-radius:12px; object-fit:cover; background:#0f141d; flex-shrink:0; }
+.meta { display:flex; flex-direction:column; gap:4px; justify-content:center; min-width:0; }
+.meta h2 { margin:0; font-size:15px; line-height:1.35; overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
+.meta p { margin:0; color:var(--muted); font-size:12px; }
+.badge { align-self:flex-start; color:#fff; font-size:11px; font-weight:700; padding:3px 8px; border-radius:999px; background:var(--tiktok); }
+video { width:100%; max-height:60vh; border-radius:12px; background:#000; }
+.history { display:flex; flex-direction:column; gap:8px; }
+.history-head { display:flex; justify-content:space-between; align-items:center; }
+.history-head h3 { margin:0; font-size:16px; }
+.link { background:none; border:0; color:var(--accent); font-weight:600; font-size:13px; cursor:pointer; }
+.history ul { list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:8px; }
+.item { width:100%; display:flex; gap:10px; align-items:center; text-align:left; background:var(--card);
+  border:1px solid var(--line); border-radius:12px; padding:8px; color:var(--text); cursor:pointer; font:inherit; }
+.item img { width:48px; height:64px; border-radius:8px; object-fit:cover; background:#0f141d; flex-shrink:0; }
+.item span { display:flex; flex-direction:column; gap:2px; min-width:0; }
+.item strong { font-size:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.item small { color:var(--muted); font-size:12px; }
+.install { background:#1a2540; border:1px solid var(--accent); border-radius:18px; padding:12px 16px; font-size:13px; line-height:1.5; }
+.install b { color:var(--text); }
+[hidden] { display:none !important; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="logo" aria-hidden="true">▶</div>
+    <div>
+      <h1>Video Saver</h1>
+      <p>TikTok-Videos ohne Wasserzeichen aufs Handy speichern.</p>
+    </div>
+  </header>
+
+  <section class="card">
+    <label class="label" for="link">Link einfügen</label>
+    <form class="row" id="form">
+      <input id="link" type="url" placeholder="https://www.tiktok.com/… oder vm.tiktok.com/…" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false">
+      <button type="button" class="clear" id="clear" aria-label="Leeren" hidden>×</button>
+    </form>
+    <div class="actions">
+      <button type="button" class="btn btn-secondary" id="paste">Aus Zwischenablage</button>
+      <button type="button" class="btn btn-primary" id="go" disabled>Video holen</button>
+    </div>
+    <div class="progress indeterminate" id="loading" hidden><i></i></div>
+    <p class="error" id="error" role="alert" hidden></p>
+  </section>
+
+  <section class="card" id="result" hidden>
+    <div class="result-top">
+      <img class="thumb" id="thumb" alt="">
+      <div class="meta">
+        <span class="badge">TikTok</span>
+        <h2 id="title"></h2>
+        <p id="sub"></p>
+      </div>
+    </div>
+    <video id="preview" controls playsinline preload="metadata"></video>
+    <div class="progress" id="dlprogress" hidden><i></i></div>
+    <div class="actions">
+      <button type="button" class="btn btn-primary" id="share" hidden>In Fotos speichern</button>
+      <button type="button" class="btn btn-secondary" id="download">Herunterladen</button>
+    </div>
+    <p class="note" id="note" hidden></p>
+    <p class="hint" id="savehint"></p>
+    <p class="hint"><a id="direct" href="#" target="_blank" rel="noopener" style="color:var(--accent)">Video direkt im Browser öffnen</a> (dort lange drücken → „Video sichern“)</p>
+  </section>
+
+  <section class="history" id="history" hidden>
+    <div class="history-head">
+      <h3>Zuletzt geladen</h3>
+      <button type="button" class="link" id="clearhistory">Verlauf löschen</button>
+    </div>
+    <ul id="historylist"></ul>
+  </section>
+
+  <section class="install" id="install" hidden>
+    <b>Als App installieren:</b> <span id="installtext"></span>
+  </section>
+
+  <footer>
+    Nur für den privaten Gebrauch. Bitte Urheberrechte und die Nutzungsbedingungen der Plattformen beachten.
+    Instagram-Links funktionieren nur in der Handy-App, nicht in der Web-Version.
+  </footer>
+</main>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const els = {
+    form: $('form'), link: $('link'), clear: $('clear'), paste: $('paste'), go: $('go'), loading: $('loading'), error: $('error'),
+    result: $('result'), thumb: $('thumb'), title: $('title'), sub: $('sub'), preview: $('preview'), dlprogress: $('dlprogress'),
+    share: $('share'), download: $('download'), note: $('note'), savehint: $('savehint'), direct: $('direct'),
+    history: $('history'), historylist: $('historylist'), clearhistory: $('clearhistory'), install: $('install'), installtext: $('installtext'),
+  };
+  const HISTORY_KEY = 'video-saver-history';
+  let current = null;
+  let busy = false;
+
+  /* ---------- Link-Erkennung ---------- */
+  const URL_RE = /https?:\/\/[^\s<>"']+/gi;
+  function hostOf(url) { try { return new URL(url).hostname.toLowerCase().replace(/^www\./, ''); } catch { return ''; } }
+  function platformOf(url) {
+    const h = hostOf(url);
+    if (h === 'tiktok.com' || h.endsWith('.tiktok.com')) return 'tiktok';
+    if (h === 'instagram.com' || h.endsWith('.instagram.com') || h === 'instagr.am') return 'instagram';
+    return null;
+  }
+  function findUrl(text) {
+    for (const m of (text || '').match(URL_RE) || []) {
+      const c = m.replace(/[),.;]+$/, '');
+      if (platformOf(c)) return c;
+    }
+    return null;
+  }
+  function videoId(url) {
+    try {
+      const p = new URL(url).pathname;
+      const m = p.match(/\/(?:video|photo)\/(\d{6,})/) || p.match(/\/v\/(\d{6,})/);
+      return m ? m[1] : null;
+    } catch { return null; }
+  }
+
+  /* ---------- TikTok über tikwm (HD ohne Wasserzeichen) ---------- */
+  const abs = (u) => !u ? null : (u.startsWith('http') ? u : 'https://www.tikwm.com' + (u.startsWith('/') ? '' : '/') + u);
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  async function fetchTikTok(url) {
+    const api = 'https://www.tikwm.com/api/?url=' + encodeURIComponent(url) + '&hd=1';
+    for (let attempt = 0; ; attempt++) {
+      const res = await fetch(api, { headers: { Accept: 'application/json' } });
+      if (!res.ok) throw new Error('TikTok-Dienst antwortet nicht (HTTP ' + res.status + ').');
+      const json = await res.json();
+      if (json.code !== 0) {
+        if (/limit/i.test(json.msg || '') && attempt < 3) { await sleep(1200 * (attempt + 1)); continue; }
+        throw new Error(json.msg ? 'TikTok: ' + json.msg : 'TikTok-Video konnte nicht geladen werden.');
+      }
+      const d = json.data || {};
+      if (d.images && d.images.length && !d.play && !d.hdplay) throw new Error('Dieser Beitrag ist eine Bilder-Slideshow und kein Video.');
+      const hd = abs(d.hdplay), sd = abs(d.play);
+      if (!hd && !sd) throw new Error('TikTok hat keine Video-Datei geliefert.');
+      const id = d.id || videoId(url) || String(Date.now());
+      return {
+        id, sourceUrl: 'https://www.tiktok.com/@/video/' + id,
+        title: (d.title || '').trim() || 'TikTok-Video',
+        author: d.author && d.author.unique_id ? '@' + d.author.unique_id : (d.author && d.author.nickname) || '',
+        thumbnail: abs(d.origin_cover) || abs(d.cover), duration: d.duration,
+        urls: [hd, sd].filter((u, i, a) => u && a.indexOf(u) === i),
+        fileName: 'tiktok_' + id + '.mp4',
+      };
+    }
+  }
+
+  /* ---------- Download als Blob mit Fortschritt ---------- */
+  async function fetchBlob(urls, onProgress) {
+    let lastErr = null;
+    for (const u of urls) {
+      try {
+        const res = await fetch(u);
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const total = Number(res.headers.get('Content-Length')) || 0;
+        if (!res.body || !total) { const b = await res.blob(); onProgress(1); return b; }
+        const reader = res.body.getReader(); const chunks = []; let got = 0;
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          chunks.push(value); got += value.length; onProgress(Math.min(got / total, 1));
+        }
+        return new Blob(chunks, { type: 'video/mp4' });
+      } catch (e) { lastErr = e; }
+    }
+    throw new Error('Download fehlgeschlagen' + (lastErr ? ' (' + lastErr.message + ')' : '') + '.');
+  }
+
+  /* ---------- Anzeige ---------- */
+  function setBusy(b) {
+    busy = b;
+    els.go.disabled = b || !findUrl(els.link.value);
+    els.paste.disabled = b; els.share.disabled = b; els.download.disabled = b;
+    els.loading.hidden = !b || current !== null;
+  }
+  function showError(msg) { els.error.textContent = msg; els.error.hidden = !msg; }
+  function fmtDuration(s) { if (!s) return ''; const m = Math.floor(s / 60); return m + ':' + String(Math.round(s % 60)).padStart(2, '0') + ' min'; }
+  function fmtBytes(b) { return b >= 1048576 ? (b / 1048576).toFixed(1) + ' MB' : Math.round(b / 1024) + ' KB'; }
+  const canShareFiles = (() => { try { return !!navigator.canShare && navigator.canShare({ files: [new File(['x'], 'p.mp4', { type: 'video/mp4' })] }); } catch { return false; } })();
+
+  function render(info) {
+    current = info;
+    els.thumb.src = info.thumbnail || ''; els.thumb.hidden = !info.thumbnail;
+    els.title.textContent = info.title;
+    els.sub.textContent = [info.author, fmtDuration(info.duration)].filter(Boolean).join(' · ');
+    els.preview.src = info.urls[0]; els.preview.poster = info.thumbnail || '';
+    els.direct.href = info.urls[0];
+    els.share.hidden = !canShareFiles;
+    els.download.className = 'btn ' + (canShareFiles ? 'btn-secondary' : 'btn-primary');
+    els.savehint.textContent = canShareFiles
+      ? '„In Fotos speichern“ öffnet das Teilen-Menü deines Handys. Dort „Video sichern“ wählen.'
+      : 'Die Datei landet im Download-Ordner. Von dort kannst du sie in die Galerie verschieben.';
+    els.note.hidden = true; els.dlprogress.hidden = true;
+    els.result.hidden = false;
+    els.result.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  async function analyze(raw) {
+    const url = findUrl(raw);
+    if (!url) { showError('Bitte einen TikTok-Link einfügen.'); return; }
+    if (platformOf(url) === 'instagram') { showError('Instagram blockiert Zugriffe aus dem Browser. Instagram-Links funktionieren nur in der Handy-App.'); return; }
+    els.link.value = url; els.clear.hidden = false;
+    showError(''); current = null; els.result.hidden = true; els.loading.hidden = false;
+    setBusy(true);
+    try {
+      const info = await fetchTikTok(url);
+      render(info);
+      pushHistory(info);
+    } catch (e) { showError(e.message || 'Unbekannter Fehler.'); }
+    finally { els.loading.hidden = true; setBusy(false); }
+  }
+
+  async function withProgress(fn) {
+    els.dlprogress.hidden = false; els.dlprogress.firstElementChild.style.width = '0%'; els.note.hidden = true;
+    setBusy(true);
+    try {
+      const blob = await fetchBlob(current.urls, (f) => { els.dlprogress.firstElementChild.style.width = Math.round(f * 100) + '%'; });
+      await fn(blob);
+    } catch (e) {
+      if (!(e && e.name === 'AbortError')) { els.note.textContent = e.message || 'Fehler beim Speichern.'; els.note.style.color = 'var(--danger)'; els.note.hidden = false; }
+    } finally { els.dlprogress.hidden = true; setBusy(false); }
+  }
+  function noteOk(text) { els.note.textContent = text; els.note.style.color = 'var(--ok)'; els.note.hidden = false; }
+
+  els.share.addEventListener('click', () => withProgress(async (blob) => {
+    const file = new File([blob], current.fileName, { type: 'video/mp4' });
+    await navigator.share({ files: [file], title: current.title });
+    noteOk('Fertig. Im Menü „Video sichern“ bzw. „In Fotos speichern“ wählen.');
+  }));
+  els.download.addEventListener('click', () => withProgress(async (blob) => {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = current.fileName; a.style.display = 'none';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+    noteOk('Download gestartet (' + fmtBytes(blob.size) + ').');
+  }));
+
+  /* ---------- Eingabe ---------- */
+  els.link.addEventListener('input', () => { els.clear.hidden = !els.link.value; els.go.disabled = busy || !findUrl(els.link.value); showError(''); });
+  els.clear.addEventListener('click', () => { els.link.value = ''; els.clear.hidden = true; els.go.disabled = true; els.link.focus(); });
+  els.form.addEventListener('submit', (e) => { e.preventDefault(); if (!busy) analyze(els.link.value); });
+  els.go.addEventListener('click', () => analyze(els.link.value));
+  els.paste.addEventListener('click', async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (findUrl(text)) analyze(text);
+      else { showError('In der Zwischenablage ist kein TikTok-Link.'); els.link.focus(); }
+    } catch { showError('Zwischenablage nicht lesbar. Bitte den Link ins Feld einfügen.'); els.link.focus(); }
+  });
+
+  /* ---------- Verlauf ---------- */
+  function loadHistory() { try { const v = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]'); return Array.isArray(v) ? v : []; } catch { return []; } }
+  function saveHistory(list) { try { localStorage.setItem(HISTORY_KEY, JSON.stringify(list.slice(0, 30))); } catch {} }
+  function pushHistory(info) {
+    const list = [{ id: info.id, title: info.title, author: info.author, thumbnail: info.thumbnail, sourceUrl: info.sourceUrl, at: Date.now() },
+      ...loadHistory().filter((e) => e.id !== info.id)];
+    saveHistory(list); renderHistory();
+  }
+  function renderHistory() {
+    const list = loadHistory();
+    els.history.hidden = list.length === 0;
+    els.historylist.replaceChildren(...list.map((e) => {
+      const li = document.createElement('li'); const b = document.createElement('button'); b.type = 'button'; b.className = 'item';
+      if (e.thumbnail) { const img = document.createElement('img'); img.src = e.thumbnail; img.alt = ''; img.loading = 'lazy'; b.appendChild(img); }
+      const span = document.createElement('span'); const st = document.createElement('strong'); st.textContent = e.title;
+      const sm = document.createElement('small'); sm.textContent = ['TikTok', e.author, new Date(e.at).toLocaleDateString('de-DE')].filter(Boolean).join(' · ');
+      span.append(st, sm); b.appendChild(span); b.addEventListener('click', () => { if (!busy) analyze(e.sourceUrl); }); li.appendChild(b); return li;
+    }));
+  }
+  els.clearhistory.addEventListener('click', () => { saveHistory([]); renderHistory(); });
+  renderHistory();
+
+  /* ---------- Installieren + Teilen-Ziel + Service Worker ---------- */
+  const standalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+  if (!standalone) {
+    const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
+    els.installtext.textContent = ios
+      ? 'In Safari unten auf „Teilen“ tippen und „Zum Home-Bildschirm“ wählen. Danach startet die App wie eine normale App.'
+      : 'Im Browser-Menü „Zum Startbildschirm hinzufügen“ bzw. „App installieren“ wählen. Danach kannst du TikTok-Links direkt über „Teilen“ an Video Saver schicken.';
+    els.install.hidden = false;
+  }
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(() => {});
+
+  const params = new URLSearchParams(location.search);
+  const shared = findUrl(params.get('url') || '') || findUrl(params.get('text') || '') || findUrl(params.get('title') || '');
+  if (shared) { history.replaceState(null, '', location.pathname); analyze(shared); }
+})();
+</script>
+</body>
+</html>
