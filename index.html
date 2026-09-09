@@ -172,33 +172,64 @@ video { width:100%; max-height:60vh; border-radius:12px; background:#000; }
     } catch { return null; }
   }
 
-  /* ---------- TikTok über tikwm (HD ohne Wasserzeichen) ---------- */
+  /* ---------- Videodaten holen ----------
+     Direkte Links enthalten die Video-Nummer. Dann reicht TikToks eigene oEmbed-Schnittstelle
+     für Titel/Autor/Vorschau und der reine Video-Pfad ohne Wasserzeichen. Nur Kurzlinks
+     brauchen die tikwm-Schnittstelle, die den Kurzlink auflöst. */
   const abs = (u) => !u ? null : (u.startsWith('http') ? u : 'https://www.tikwm.com' + (u.startsWith('/') ? '' : '/') + u);
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-  async function fetchTikTok(url) {
-    const api = 'https://www.tikwm.com/api/?url=' + encodeURIComponent(url) + '&hd=1';
-    for (let attempt = 0; ; attempt++) {
-      const res = await fetch(api, { headers: { Accept: 'application/json' } });
-      if (!res.ok) throw new Error('TikTok-Dienst antwortet nicht (HTTP ' + res.status + ').');
-      const json = await res.json();
-      if (json.code !== 0) {
-        if (/limit/i.test(json.msg || '') && attempt < 3) { await sleep(1200 * (attempt + 1)); continue; }
+  const hdUrl = (id) => 'https://www.tikwm.com/video/media/hdplay/' + id + '.mp4';
+  const sdUrl = (id) => 'https://www.tikwm.com/video/media/play/' + id + '.mp4';
+  const canonical = (id) => 'https://www.tiktok.com/@/video/' + id;
+
+  async function fetchOembed(url) {
+    const res = await fetch('https://www.tiktok.com/oembed?url=' + encodeURIComponent(url));
+    if (!res.ok) throw new Error('oembed ' + res.status);
+    const j = await res.json();
+    const handle = (j.author_url || '').match(/tiktok\.com\/@([^/?]+)/);
+    return { title: (j.title || '').trim(), author: handle ? '@' + handle[1] : (j.author_name || ''), thumbnail: j.thumbnail_url || null };
+  }
+
+  async function fetchTikwm(url) {
+    const hosts = ['https://www.tikwm.com', 'https://tikwm.com'];
+    let lastStatus = 0;
+    for (const h of hosts) {
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const res = await fetch(h + '/api/?url=' + encodeURIComponent(url) + '&hd=1', { headers: { Accept: 'application/json' } });
+        lastStatus = res.status;
+        if (!res.ok) break;
+        const json = await res.json();
+        if (json.code === 0) return json.data || {};
+        if (/limit/i.test(json.msg || '')) { await sleep(1200 * (attempt + 1)); continue; }
         throw new Error(json.msg ? 'TikTok: ' + json.msg : 'TikTok-Video konnte nicht geladen werden.');
       }
-      const d = json.data || {};
-      if (d.images && d.images.length && !d.play && !d.hdplay) throw new Error('Dieser Beitrag ist eine Bilder-Slideshow und kein Video.');
-      const hd = abs(d.hdplay), sd = abs(d.play);
-      if (!hd && !sd) throw new Error('TikTok hat keine Video-Datei geliefert.');
-      const id = d.id || videoId(url) || String(Date.now());
-      return {
-        id, sourceUrl: 'https://www.tiktok.com/@/video/' + id,
-        title: (d.title || '').trim() || 'TikTok-Video',
-        author: d.author && d.author.unique_id ? '@' + d.author.unique_id : (d.author && d.author.nickname) || '',
-        thumbnail: abs(d.origin_cover) || abs(d.cover), duration: d.duration,
-        urls: [hd, sd].filter((u, i, a) => u && a.indexOf(u) === i),
-        fileName: 'tiktok_' + id + '.mp4',
-      };
     }
+    const err = new Error(lastStatus === 403
+      ? 'Der Kurzlink-Dienst blockiert dein Netz (HTTP 403). Öffne den Kurzlink einmal in Safari oder Chrome, kopiere die vollständige Adresse (mit /video/…) und füge sie hier ein.'
+      : 'Kurzlink-Dienst antwortet nicht (HTTP ' + lastStatus + '). Bitte den vollständigen Link mit /video/… einfügen.');
+    err.status = lastStatus; throw err;
+  }
+
+  async function fetchTikTok(url) {
+    let id = videoId(url);
+    let meta = { title: '', author: '', thumbnail: null };
+    let duration;
+    if (id) {
+      try { meta = await fetchOembed(url); } catch { /* Vorschau ist optional */ }
+    } else {
+      const d = await fetchTikwm(url);
+      if (d.images && d.images.length && !d.play && !d.hdplay) throw new Error('Dieser Beitrag ist eine Bilder-Slideshow und kein Video.');
+      id = d.id || null;
+      if (!id) throw new Error('TikTok hat keine Video-Nummer geliefert.');
+      meta = { title: (d.title || '').trim(), author: d.author && d.author.unique_id ? '@' + d.author.unique_id : '', thumbnail: abs(d.origin_cover) || abs(d.cover) };
+      duration = d.duration;
+    }
+    return {
+      id, sourceUrl: canonical(id),
+      title: meta.title || 'TikTok-Video', author: meta.author || '', thumbnail: meta.thumbnail, duration,
+      urls: [hdUrl(id), sdUrl(id)],
+      fileName: 'tiktok_' + id + '.mp4',
+    };
   }
 
   /* ---------- Download als Blob mit Fortschritt ---------- */
@@ -219,7 +250,7 @@ video { width:100%; max-height:60vh; border-radius:12px; background:#000; }
         return new Blob(chunks, { type: 'video/mp4' });
       } catch (e) { lastErr = e; }
     }
-    throw new Error('Download fehlgeschlagen' + (lastErr ? ' (' + lastErr.message + ')' : '') + '.');
+    throw new Error('Video konnte nicht geladen werden' + (lastErr ? ' (' + lastErr.message + ')' : '') + '. Versuche „Video direkt im Browser öffnen“ weiter unten.');
   }
 
   /* ---------- Anzeige ---------- */
