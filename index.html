@@ -204,29 +204,57 @@ video { width:100%; max-height:60vh; border-radius:12px; background:#000; }
         throw new Error(json.msg ? 'TikTok: ' + json.msg : 'TikTok-Video konnte nicht geladen werden.');
       }
     }
-    const err = new Error(lastStatus === 403
-      ? 'Der Kurzlink-Dienst blockiert dein Netz (HTTP 403). Öffne den Kurzlink einmal in Safari oder Chrome, kopiere die vollständige Adresse (mit /video/…) und füge sie hier ein.'
-      : 'Kurzlink-Dienst antwortet nicht (HTTP ' + lastStatus + '). Bitte den vollständigen Link mit /video/… einfügen.');
-    err.status = lastStatus; throw err;
+    throw new Error('HTTP ' + lastStatus);
+  }
+
+  /* Kurzlink -> vollständige Adresse. Mehrere Wege, weil einzelne Dienste je nach Netz blockieren. */
+  async function resolveShortLink(url) {
+    const failures = [];
+    const resolvers = [
+      ['unshorten.me', async () => {
+        const res = await fetch('https://unshorten.me/json/' + url, { headers: { Accept: 'application/json' } });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const j = await res.json();
+        if (!j.success || !j.resolved_url) throw new Error('keine Auflösung');
+        return j.resolved_url;
+      }],
+      ['microlink', async () => {
+        const res = await fetch('https://api.microlink.io/?url=' + encodeURIComponent(url));
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const j = await res.json();
+        if (!j.data || !j.data.url) throw new Error('keine Auflösung');
+        return j.data.url;
+      }],
+      ['tikwm', async () => {
+        const d = await fetchTikwm(url);
+        if (!d.id) throw new Error('keine Video-Nummer');
+        return canonical(d.id);
+      }],
+    ];
+    for (const [name, run] of resolvers) {
+      try {
+        const resolved = await run();
+        if (videoId(resolved)) return resolved;
+        failures.push(name + ': kein Video-Link');
+      } catch (e) { failures.push(name + ': ' + (e.message || 'Fehler')); }
+    }
+    throw new Error('Kurzlink konnte nicht aufgelöst werden (' + failures.join(', ') + '). Öffne den Kurzlink einmal in Safari oder Chrome, kopiere die vollständige Adresse mit /video/… und füge sie hier ein.');
   }
 
   async function fetchTikTok(url) {
-    let id = videoId(url);
-    let meta = { title: '', author: '', thumbnail: null };
-    let duration;
-    if (id) {
-      try { meta = await fetchOembed(url); } catch { /* Vorschau ist optional */ }
-    } else {
-      const d = await fetchTikwm(url);
-      if (d.images && d.images.length && !d.play && !d.hdplay) throw new Error('Dieser Beitrag ist eine Bilder-Slideshow und kein Video.');
-      id = d.id || null;
-      if (!id) throw new Error('TikTok hat keine Video-Nummer geliefert.');
-      meta = { title: (d.title || '').trim(), author: d.author && d.author.unique_id ? '@' + d.author.unique_id : '', thumbnail: abs(d.origin_cover) || abs(d.cover) };
-      duration = d.duration;
+    let full = url;
+    let id = videoId(full);
+    if (!id) {
+      full = await resolveShortLink(url);
+      id = videoId(full);
     }
+    if (!id) throw new Error('Das ist kein Link zu einem einzelnen TikTok-Video.');
+    if (/\/photo\//.test(full)) throw new Error('Dieser Beitrag ist eine Bilder-Slideshow und kein Video.');
+    let meta = { title: '', author: '', thumbnail: null };
+    try { meta = await fetchOembed(full); } catch { /* Vorschau ist optional */ }
     return {
       id, sourceUrl: canonical(id),
-      title: meta.title || 'TikTok-Video', author: meta.author || '', thumbnail: meta.thumbnail, duration,
+      title: meta.title || 'TikTok-Video', author: meta.author || '', thumbnail: meta.thumbnail,
       urls: [hdUrl(id), sdUrl(id)],
       fileName: 'tiktok_' + id + '.mp4',
     };
